@@ -1,19 +1,63 @@
 // ============================================================
-//  ИИ-чат: локальная LLM Qwen 2.5 0.5B через transformers.js.
-//  Модель скачивается один раз (~460 МБ) и работает офлайн.
+//  ИИ-чат: локальная LLM через transformers.js.
+//  Две модели на выбор: SmolLM2-360M (~260 МБ, по умолчанию)
+//  и Qwen 2.5 0.5B (~460 МБ). Скачиваются один раз, работают офлайн.
 // ============================================================
 
 const Chat = (() => {
-  const MODEL = 'onnx-community/Qwen2.5-0.5B-Instruct';
+  const MODELS = {
+    smol: {
+      id: 'onnx-community/SmolLM2-360M-Instruct-ONNX',
+      name: 'Быстрая (SmolLM2-360M)',
+      mb: 260,
+    },
+    qwen: {
+      id: 'onnx-community/Qwen2.5-0.5B-Instruct',
+      name: 'Умная (Qwen 2.5 0.5B)',
+      mb: 460,
+    },
+  };
   const CDN_BUNDLE = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.min.js';
+  const LS_MODEL = 'kalorii_chat_model';
+  const LS_READY = 'kalorii_chat_ready';
 
   let generator = null;
+  let loadedModelId = null;
   let status = 'idle';      // idle | downloading | ready | generating | error
   let history = [];         // [{role:'user'|'assistant', content}]
   let busy = false;
 
+  function lsGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+  function lsSet(key, val) { try { localStorage.setItem(key, val); } catch (e) { /* ignore */ } }
+
+  function getModelId() {
+    const v = lsGet(LS_MODEL);
+    return v === 'qwen' ? 'qwen' : 'smol';
+  }
+  function setModelId(id) { lsSet(LS_MODEL, id === 'qwen' ? 'qwen' : 'smol'); }
+  function getModelMeta() { return MODELS[getModelId()]; }
+
+  // Флаг «модель уже скачана» — переживает перезапуск приложения (в т.ч. краш iOS)
+  function wasDownloaded() { return lsGet(LS_READY) === getModelId(); }
+  function markDownloaded() { lsSet(LS_READY, getModelId()); }
+
   function getStatus() { return status; }
   function isReady() { return !!generator; }
+  function getLoadedModelId() { return loadedModelId; }
+
+  function isIOS() {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    // iPad в режиме десктопа
+    return /Macintosh/.test(ua) && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1;
+  }
+
+  function pickDevice() {
+    // На iOS используем WASM: WebGPU на больших моделях приводит к перезагрузке
+    // процесса Safari (PWA молча перезапускается) — стабильность важнее скорости.
+    if (isIOS()) return 'wasm';
+    return (typeof navigator !== 'undefined' && navigator.gpu) ? 'webgpu' : 'wasm';
+  }
 
   // Локальный бандл, при отсутствии — CDN (service worker закэширует)
   async function loadTransformers() {
@@ -27,7 +71,7 @@ const Chat = (() => {
 
   function buildSystem() {
     let s = 'Ты — дружелюбный ИИ-диетолог внутри локального приложения «Калории» для iPhone. ' +
-      'Отвечай на русском, кратко (до 120 слов), конкретно и по делу. ' +
+      'Отвечай на русском, кратко (до 100 слов), конкретно и по делу. ' +
       'Не нравоучай. Если в контексте есть данные пользователя — используй их в ответе. ' +
       'Если данных не хватает для ответа — задай уточняющий вопрос. ' +
       'Не выдумывай точные цифры, которых нет в контексте. ' +
@@ -51,9 +95,11 @@ const Chat = (() => {
       const { pipeline, env } = await loadTransformers();
       env.allowRemoteModels = true;
       env.useBrowserCache = true;
-      const device = (typeof navigator !== 'undefined' && navigator.gpu) ? 'webgpu' : 'wasm';
-      onProgress && onProgress(`Скачиваю модель (~460 МБ)${device === 'webgpu' ? ', GPU ускорение' : ', режим CPU (медленнее)'}…`, 0);
-      generator = await pipeline('text-generation', MODEL, {
+      const modelId = getModelId();
+      const meta = MODELS[modelId];
+      const device = pickDevice();
+      onProgress && onProgress(`Скачиваю модель (${meta.name}, ~${meta.mb} МБ)…`, 0);
+      generator = await pipeline('text-generation', meta.id, {
         dtype: 'q4f16',
         device,
         progress_callback: (info) => {
@@ -66,7 +112,9 @@ const Chat = (() => {
           }
         },
       });
+      loadedModelId = modelId;
       status = 'ready';
+      markDownloaded();
       onProgress && onProgress('Готово!', 100);
       return generator;
     } catch (e) {
@@ -93,7 +141,7 @@ const Chat = (() => {
     return '';
   }
 
-  // Вопрос модели. onToken(text, isDone)
+  // Вопрос модели
   async function ask(question) {
     if (!generator) throw new Error('Модель не загружена');
     if (busy) throw new Error('Уже отвечаю');
@@ -106,7 +154,7 @@ const Chat = (() => {
         { role: 'user', content: question },
       ];
       const opts = {
-        max_new_tokens: 150,
+        max_new_tokens: 120,
         temperature: 0.7,
         top_p: 0.9,
         do_sample: true,
@@ -127,5 +175,9 @@ const Chat = (() => {
     history = [];
   }
 
-  return { download, ask, getStatus, isReady, resetChat };
+  return {
+    download, ask, getStatus, isReady, resetChat,
+    getModelId, setModelId, getModelMeta, wasDownloaded, markDownloaded,
+    MODELS,
+  };
 })();

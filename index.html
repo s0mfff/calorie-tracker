@@ -162,13 +162,16 @@
         <div class="card chat-welcome" id="chat-welcome">
           <div class="chat-ico">🤖</div>
           <h2>Личный ИИ-диетолог</h2>
-          <p>Настоящая языковая модель <b>Qwen 2.5</b> работает прямо на твоём телефоне — без интернета и серверов. Она видит твой дневник питания, цели и вес и отвечает на вопросы: что съесть, как скорректировать день, как составить план.</p>
-          <div class="chat-requirements">
-            <div class="req">📦 Размер модели: <b>~460 МБ</b> (скачивается один раз, потом работает офлайн)</div>
-            <div class="req">📱 Рекомендуется iPhone 13+ и iOS 18 — иначе модель будет работать медленно (на CPU)</div>
-            <div class="req">💬 История чата хранится в памяти до закрытия приложения</div>
+          <p>Настоящая языковая модель работает прямо на твоём телефоне — без интернета и серверов. Она видит твой дневник питания, цели и вес и отвечает на вопросы: что съесть, как скорректировать день, как составить план.</p>
+          <div class="field"><span>Модель</span>
+            <div class="seg" id="chat-model">
+              <button class="seg-btn active" data-m="smol">⚡ Быстрая · ~260 МБ</button>
+              <button class="seg-btn" data-m="qwen">🧠 Умная · ~460 МБ</button>
+            </div>
           </div>
-          <button class="btn btn-primary btn-block" id="btn-chat-download">⬇️ Скачать модель и начать</button>
+          <div class="chat-requirements" id="chat-req"></div>
+          <div class="req chat-error hidden" id="chat-error"></div>
+          <button class="btn btn-primary btn-block" id="btn-chat-download">⬇️ Скачать модель (~260 МБ)</button>
           <button class="btn btn-ghost btn-block hidden" id="btn-chat-cancel">Отмена</button>
         </div>
 

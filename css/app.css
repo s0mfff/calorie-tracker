@@ -401,6 +401,12 @@ select {
 .dl-bar { height: 12px; background: var(--bg2); border-radius: 7px; overflow: hidden; margin: 10px 0; }
 #chat-dl-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent2), var(--accent)); border-radius: 7px; transition: width .3s; }
 .dl-status { color: var(--text2); font-size: 13px; min-height: 18px; }
+.chat-error {
+  background: rgba(255,107,107,.1) !important;
+  border-color: rgba(255,107,107,.35) !important;
+  color: var(--red) !important;
+  white-space: pre-line;
+}
 
 /* ---------- Тост ---------- */
 #toast {

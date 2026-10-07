@@ -1,5 +1,5 @@
 // Service worker «Калории» — офлайн-кэш
-const CACHE = 'kalorii-v2';
+const CACHE = 'kalorii-v3';
 
 const PRECACHE = [
   './',

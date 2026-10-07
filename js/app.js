@@ -546,9 +546,26 @@ const CHAT_PRESETS = [
 
 function renderChat() {
   const ready = typeof Chat !== 'undefined' && Chat.isReady();
+  const haveChat = typeof Chat !== 'undefined';
   $('#chat-welcome').classList.toggle('hidden', ready);
   $('#chat-panel').classList.toggle('hidden', !ready);
   $('#chat-downloading').classList.toggle('hidden', true);
+
+  if (haveChat && !ready) {
+    // актуальное состояние селектора модели и кнопки
+    const mid = Chat.getModelId();
+    const meta = Chat.getModelMeta();
+    const downloaded = Chat.wasDownloaded();
+    $$('#chat-model .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.m === mid));
+    $('#chat-req').innerHTML = `
+      <div class="req">📦 Размер модели: <b>~${meta.mb} МБ</b> (скачивается один раз, дальше работает офлайн)</div>
+      <div class="req">📱 На iPhone модель работает в стабильном режиме CPU — ответы занимают ~30–90 сек</div>
+      <div class="req">💬 История чата хранится до закрытия приложения</div>`;
+    $('#btn-chat-download').textContent = downloaded
+      ? '🚀 Запустить чат (модель уже на телефоне)'
+      : `⬇️ Скачать модель (~${meta.mb} МБ)`;
+  }
+
   if (ready && !$('#chat-log').dataset.rendered) {
     $('#chat-log').dataset.rendered = '1';
     $('#chat-log').innerHTML = '<div class="msg ai">Привет! Я ИИ-диетолог, работаю прямо на твоём телефоне. Я вижу твой дневник, цели и вес. Спроси меня о чём угодно — или нажми на подсказку ниже. 👇</div>';
@@ -570,6 +587,7 @@ function appendChatMsg(role, text) {
 }
 
 async function startChatDownload() {
+  $('#chat-error').classList.add('hidden');
   $('#chat-welcome').classList.add('hidden');
   $('#chat-downloading').classList.remove('hidden');
   $('#btn-chat-cancel').classList.add('hidden');
@@ -587,9 +605,9 @@ async function startChatDownload() {
     $('#chat-welcome').classList.remove('hidden');
     const msg = e && e.message ? e.message : 'неизвестная ошибка';
     toast('Не удалось загрузить модель: ' + msg);
-    // показываем текст ошибки в welcome
-    const w = $('#chat-welcome p');
-    if (w) w.innerHTML = `Не удалось загрузить модель: <b>${esc(msg)}</b>. Проверь подключение к интернету и свободное место (~500 МБ) и попробуй снова.`;
+    const err = $('#chat-error');
+    err.textContent = '⚠️ Не удалось загрузить модель: ' + msg + '. Проверь интернет и свободное место на телефоне, затем попробуй ещё раз.';
+    err.classList.remove('hidden');
   }
 }
 
@@ -934,6 +952,12 @@ function bindEvents() {
 
   // ИИ-чат
   $('#btn-chat-download').addEventListener('click', startChatDownload);
+  $('#chat-model').addEventListener('click', e => {
+    const b = e.target.closest('[data-m]');
+    if (!b || typeof Chat === 'undefined') return;
+    Chat.setModelId(b.dataset.m);
+    renderChat();
+  });
   $('#chat-send').addEventListener('click', () => sendChatMessage($('#chat-input').value));
   $('#chat-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendChatMessage($('#chat-input').value); });
   $('#chat-clear').addEventListener('click', () => {
