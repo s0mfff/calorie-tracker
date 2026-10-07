@@ -61,13 +61,17 @@ if (stage === 'create') {
 if (stage === 'enable') {
   const me = await ghJson('/user');
   const login = me.json.login;
-  const r = await ghJson(`/repos/${login}/${REPO}/pages`, {
-    method: 'POST',
-    body: JSON.stringify({ build_type: 'workflow' }),
-  });
-  if (r.status === 409) console.log('Pages уже включены');
-  else if (r.status >= 400) console.error('Pages API:', r.status, JSON.stringify(r.json).slice(0, 300));
-  else console.log('Pages включены (workflow):', JSON.stringify(r.json).slice(0, 200));
+  const body = JSON.stringify({ build_type: 'legacy', source: { branch: 'main', path: '/' } });
+  let r = await ghJson(`/repos/${login}/${REPO}/pages`, { method: 'POST', body });
+  if (r.status === 409) {
+    console.log('Pages уже включены, обновляю источник…');
+    r = await ghJson(`/repos/${login}/${REPO}/pages`, { method: 'PUT', body });
+  }
+  if (r.status >= 400) {
+    console.error('Pages API:', r.status, JSON.stringify(r.json).slice(0, 400));
+    process.exit(1);
+  }
+  console.log('Pages включены:', r.json.html_url || r.json.status || JSON.stringify(r.json).slice(0, 150));
   console.log('LOGIN=' + login);
 }
 
