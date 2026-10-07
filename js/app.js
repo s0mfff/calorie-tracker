@@ -556,11 +556,16 @@ function renderChat() {
     const mid = Chat.getModelId();
     const meta = Chat.getModelMeta();
     const downloaded = Chat.wasDownloaded();
+    const lastLog = !downloaded ? Chat.getLastLog() : null;
     $$('#chat-model .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.m === mid));
-    $('#chat-req').innerHTML = `
+    let reqHtml = `
       <div class="req">📦 Размер модели: <b>~${meta.mb} МБ</b> (скачивается один раз, дальше работает офлайн)</div>
       <div class="req">📱 На iPhone модель работает в стабильном режиме CPU — ответы занимают ~30–90 сек</div>
       <div class="req">💬 История чата хранится до закрытия приложения</div>`;
+    if (lastLog) {
+      reqHtml += `<div class="req chat-error">Прошлая попытка оборвалась на этапе: «${esc(lastLog)}». Модель, скорее всего, уже скачана — просто нажми кнопку ниже ещё раз, повторное скачивание не потребуется.</div>`;
+    }
+    $('#chat-req').innerHTML = reqHtml;
     $('#btn-chat-download').textContent = downloaded
       ? '🚀 Запустить чат (модель уже на телефоне)'
       : `⬇️ Скачать модель (~${meta.mb} МБ)`;
@@ -956,7 +961,10 @@ function bindEvents() {
     const b = e.target.closest('[data-m]');
     if (!b || typeof Chat === 'undefined') return;
     Chat.setModelId(b.dataset.m);
+    $('#chat-error').classList.add('hidden');
     renderChat();
+    const meta = Chat.getModelMeta();
+    toast('Выбрана модель: ' + meta.name);
   });
   $('#chat-send').addEventListener('click', () => sendChatMessage($('#chat-input').value));
   $('#chat-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendChatMessage($('#chat-input').value); });

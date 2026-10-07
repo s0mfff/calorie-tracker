@@ -179,23 +179,31 @@ await sleep(30);
 ok(!$('#tab-chat').classList.contains('hidden'), 'вкладка ИИ открыта');
 ok(!$('#chat-welcome').classList.contains('hidden'), 'чат показывает приветствие');
 ok($('#chat-panel').classList.contains('hidden'), 'панель чата скрыта до загрузки модели');
-ok(txt($('#chat-welcome')).includes('260'), 'по умолчанию быстрая модель (~260 МБ)');
-ok(txt($('#btn-chat-download')).includes('260'), 'кнопка показывает размер 260 МБ');
+ok(txt($('#chat-welcome')).includes('112'), 'по умолчанию мини-модель (~112 МБ)');
+ok(txt($('#btn-chat-download')).includes('112'), 'кнопка показывает размер 112 МБ');
 ok($('#chat-error').classList.contains('hidden'), 'блок ошибки скрыт');
+ok($('#chat-model').querySelectorAll('.seg-btn').length === 3, 'три варианта модели');
 // переключение на умную модель
 $('#chat-model [data-m="qwen"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
 await sleep(20);
 ok(txt($('#btn-chat-download')).includes('460'), 'после выбора умной модели — 460 МБ');
-$('#chat-model [data-m="smol"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+$('#chat-model [data-m="mini"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
 await sleep(20);
-ok(txt($('#btn-chat-download')).includes('260'), 'обратно на быструю модель');
+ok(txt($('#btn-chat-download')).includes('112'), 'обратно на мини-модель');
 // флаг «модель скачана» меняет кнопку
-window.localStorage.setItem('kalorii_chat_ready', 'smol');
+window.localStorage.setItem('kalorii_chat_ready', 'mini');
 await sleep(10);
 window.switchTab('home'); await sleep(10);
 window.switchTab('chat'); await sleep(20);
 ok(txt($('#btn-chat-download')).includes('модель уже на телефоне'), 'кнопка восстановления после скачивания');
+// журнал последней попытки отображается, если флага нет
 window.localStorage.removeItem('kalorii_chat_ready');
+window.localStorage.setItem('kalorii_chat_lastlog', 'Финальная подготовка…');
+await sleep(10);
+window.switchTab('home'); await sleep(10);
+window.switchTab('chat'); await sleep(20);
+ok(txt($('#chat-req')).includes('Прошлая попытка'), 'журнал диагностики виден после сбоя');
+window.localStorage.removeItem('kalorii_chat_lastlog');
 
 // --- итог ---
 ok(errors.length === 0, 'нет непойманных ошибок JS: ' + (errors.join(' | ') || 'чисто'));

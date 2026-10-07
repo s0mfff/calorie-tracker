@@ -1,11 +1,17 @@
 // ============================================================
 //  ИИ-чат: локальная LLM через transformers.js.
-//  Две модели на выбор: SmolLM2-360M (~260 МБ, по умолчанию)
-//  и Qwen 2.5 0.5B (~460 МБ). Скачиваются один раз, работают офлайн.
+//  Три модели на выбор. Скачиваются один раз, работают офлайн.
+//  Мини (SmolLM2-135M, ~112 МБ) — по умолчанию: самый стабильный
+//  вариант для iPhone (малый расход памяти).
 // ============================================================
 
 const Chat = (() => {
   const MODELS = {
+    mini: {
+      id: 'onnx-community/SmolLM2-135M-Instruct-ONNX',
+      name: 'Мини (SmolLM2-135M)',
+      mb: 112,
+    },
     smol: {
       id: 'onnx-community/SmolLM2-360M-Instruct-ONNX',
       name: 'Быстрая (SmolLM2-360M)',
@@ -20,6 +26,7 @@ const Chat = (() => {
   const CDN_BUNDLE = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/dist/transformers.min.js';
   const LS_MODEL = 'kalorii_chat_model';
   const LS_READY = 'kalorii_chat_ready';
+  const LS_LASTLOG = 'kalorii_chat_lastlog';
 
   let generator = null;
   let loadedModelId = null;
@@ -29,17 +36,27 @@ const Chat = (() => {
 
   function lsGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
   function lsSet(key, val) { try { localStorage.setItem(key, val); } catch (e) { /* ignore */ } }
+  function lsDel(key) { try { localStorage.removeItem(key); } catch (e) { /* ignore */ } }
 
   function getModelId() {
     const v = lsGet(LS_MODEL);
-    return v === 'qwen' ? 'qwen' : 'smol';
+    return MODELS[v] ? v : 'mini';
   }
-  function setModelId(id) { lsSet(LS_MODEL, id === 'qwen' ? 'qwen' : 'smol'); }
+  function setModelId(id) {
+    if (!MODELS[id]) id = 'mini';
+    lsSet(LS_MODEL, id);
+    if (lsGet(LS_READY) !== id) lsDel(LS_READY); // другая модель — флаг не валиден
+  }
   function getModelMeta() { return MODELS[getModelId()]; }
 
   // Флаг «модель уже скачана» — переживает перезапуск приложения (в т.ч. краш iOS)
   function wasDownloaded() { return lsGet(LS_READY) === getModelId(); }
   function markDownloaded() { lsSet(LS_READY, getModelId()); }
+
+  // Журнал этапов загрузки — для диагностики после внезапных перезапусков
+  function logStep(text) { lsSet(LS_LASTLOG, text); }
+  function getLastLog() { return lsGet(LS_LASTLOG); }
+  function clearLastLog() { lsDel(LS_LASTLOG); }
 
   function getStatus() { return status; }
   function isReady() { return !!generator; }
@@ -53,8 +70,7 @@ const Chat = (() => {
   }
 
   function pickDevice() {
-    // На iOS используем WASM: WebGPU на больших моделях приводит к перезагрузке
-    // процесса Safari (PWA молча перезапускается) — стабильность важнее скорости.
+    // На iOS — только WASM: WebGPU на больших моделях роняет процесс Safari.
     if (isIOS()) return 'wasm';
     return (typeof navigator !== 'undefined' && navigator.gpu) ? 'webgpu' : 'wasm';
   }
@@ -71,7 +87,7 @@ const Chat = (() => {
 
   function buildSystem() {
     let s = 'Ты — дружелюбный ИИ-диетолог внутри локального приложения «Калории» для iPhone. ' +
-      'Отвечай на русском, кратко (до 100 слов), конкретно и по делу. ' +
+      'Отвечай на русском, кратко (до 80 слов), конкретно и по делу. ' +
       'Не нравоучай. Если в контексте есть данные пользователя — используй их в ответе. ' +
       'Если данных не хватает для ответа — задай уточняющий вопрос. ' +
       'Не выдумывай точные цифры, которых нет в контексте. ' +
@@ -90,15 +106,18 @@ const Chat = (() => {
     if (generator) return generator;
     if (status === 'downloading') return null;
     status = 'downloading';
+    const modelId = getModelId();
+    const meta = MODELS[modelId];
+    const say = (text, pct) => { logStep(text); onProgress && onProgress(text, pct); };
     try {
-      onProgress && onProgress('Загружаю библиотеку…', null);
+      say('Загружаю библиотеку…', null);
       const { pipeline, env } = await loadTransformers();
       env.allowRemoteModels = true;
       env.useBrowserCache = true;
-      const modelId = getModelId();
-      const meta = MODELS[modelId];
+      // Меньше потоков = меньше пик памяти (важно на iOS)
+      try { if (env.backends && env.backends.onnx && env.backends.onnx.wasm) env.backends.onnx.wasm.numThreads = 1; } catch (e) { /* ignore */ }
       const device = pickDevice();
-      onProgress && onProgress(`Скачиваю модель (${meta.name}, ~${meta.mb} МБ)…`, 0);
+      say(`Скачиваю модель (${meta.name}, ~${meta.mb} МБ)…`, 0);
       generator = await pipeline('text-generation', meta.id, {
         dtype: 'q4f16',
         device,
@@ -106,20 +125,26 @@ const Chat = (() => {
           if (!info || !info.status) return;
           if (info.status === 'progress' && typeof info.progress === 'number') {
             const pct = Math.round(info.progress);
-            onProgress && onProgress(`Загрузка: ${info.file || ''} ${pct}%`, pct);
+            say(`Загрузка: ${info.file || ''} ${pct}%`, pct);
+            // Файлы уже в кэше браузера — даже если iOS перезапустит приложение
+            // на этапе инициализации, повторная загрузка не понадобится.
+            if (pct >= 100) markDownloaded();
           } else if (info.status === 'done') {
-            onProgress && onProgress('Финальная подготовка…', 100);
+            say('Финальная подготовка…', 100);
+            markDownloaded();
           }
         },
       });
       loadedModelId = modelId;
       status = 'ready';
       markDownloaded();
-      onProgress && onProgress('Готово!', 100);
+      clearLastLog();
+      say('Готово!', 100);
       return generator;
     } catch (e) {
       status = 'error';
       generator = null;
+      logStep('Ошибка: ' + (e && e.message ? e.message : 'неизвестно'));
       throw e;
     }
   }
@@ -154,7 +179,7 @@ const Chat = (() => {
         { role: 'user', content: question },
       ];
       const opts = {
-        max_new_tokens: 120,
+        max_new_tokens: 110,
         temperature: 0.7,
         top_p: 0.9,
         do_sample: true,
@@ -178,6 +203,7 @@ const Chat = (() => {
   return {
     download, ask, getStatus, isReady, resetChat,
     getModelId, setModelId, getModelMeta, wasDownloaded, markDownloaded,
+    getLastLog, clearLastLog, getLoadedModelId,
     MODELS,
   };
 })();
