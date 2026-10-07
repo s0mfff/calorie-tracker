@@ -1,0 +1,21 @@
+# Инструменты разработки
+tools/node_modules/
+tools/.modules.yaml
+tools/package.json
+tools/pnpm-lock.yaml
+tools/.npmrc
+tools/*.src.js
+tools/.gh-token
+
+# Минифицированный бандл скачивается при CI-сборке
+# (детектор секретов GitHub ложно срабатывает на нём)
+vendor/transformers.min.js
+
+# Pages собирается классическим способом (без Actions) —
+# файл оставлен локально на случай деплоя с workflow-токеном
+.github/workflows/pages.yml
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+desktop.ini

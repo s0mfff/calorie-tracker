@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <title>Калории — трекер питания</title>
+  <meta name="description" content="Локальный трекер калорий с ИИ-распознаванием еды по фото. Все данные на устройстве.">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Калории">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <!-- ======================= ОНБОРДИНГ ======================= -->
+  <div id="onboarding" class="screen hidden">
+    <div class="ob-inner">
+      <div class="ob-logo">
+        <img src="icons/apple-touch-icon.png" alt="" width="84" height="84">
+      </div>
+      <h1 class="ob-title">Калории</h1>
+      <p class="ob-sub" id="ob-sub">Твой личный диетолог в кармане. Всё работает на устройстве — без интернета и без аккаунтов.</p>
+
+      <div class="ob-step" id="ob-step-0">
+        <label class="field"><span>Как тебя зовут?</span>
+          <input type="text" id="ob-name" placeholder="Имя" maxlength="30" autocomplete="off">
+        </label>
+        <label class="field"><span>Пол</span>
+          <div class="seg" id="ob-sex">
+            <button class="seg-btn" data-v="m">Мужской</button>
+            <button class="seg-btn" data-v="f">Женский</button>
+          </div>
+        </label>
+        <button class="btn btn-primary btn-block" id="ob-next-0">Дальше</button>
+      </div>
+
+      <div class="ob-step hidden" id="ob-step-1">
+        <label class="field"><span>Возраст, лет</span>
+          <input type="number" id="ob-age" inputmode="numeric" min="10" max="100" placeholder="30">
+        </label>
+        <label class="field"><span>Рост, см</span>
+          <input type="number" id="ob-height" inputmode="decimal" min="100" max="230" placeholder="175">
+        </label>
+        <label class="field"><span>Вес, кг</span>
+          <input type="number" id="ob-weight" inputmode="decimal" min="30" max="300" placeholder="70">
+        </label>
+        <div class="ob-nav">
+          <button class="btn btn-ghost" id="ob-back-1">Назад</button>
+          <button class="btn btn-primary" id="ob-next-1">Дальше</button>
+        </div>
+      </div>
+
+      <div class="ob-step hidden" id="ob-step-2">
+        <label class="field"><span>Активность</span>
+          <select id="ob-activity"></select>
+        </label>
+        <label class="field"><span>Цель</span>
+          <select id="ob-goal"></select>
+        </label>
+        <div class="ob-targets card" id="ob-targets-preview"></div>
+        <button class="btn btn-primary btn-block" id="ob-finish">Начать 🚀</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= ПРИЛОЖЕНИЕ ======================= -->
+  <div id="app" class="screen hidden">
+    <header id="topbar">
+      <div id="topbar-title">
+        <div id="date-label"></div>
+        <h1 id="page-title">Сегодня</h1>
+      </div>
+      <button id="btn-search-top" class="icon-btn" aria-label="Поиск продукта">🔍</button>
+    </header>
+
+    <main id="main">
+      <!-- ГЛАВНАЯ -->
+      <section id="tab-home" class="tab">
+        <div class="ring-wrap">
+          <svg id="ring" viewBox="0 0 200 200" width="190" height="190">
+            <circle class="ring-bg" cx="100" cy="100" r="84"></circle>
+            <circle class="ring-val" id="ring-val" cx="100" cy="100" r="84"></circle>
+          </svg>
+          <div class="ring-center">
+            <div class="ring-kcal" id="ring-kcal">0</div>
+            <div class="ring-of" id="ring-of">из 0 ккал</div>
+            <div class="ring-left" id="ring-left"></div>
+          </div>
+        </div>
+
+        <div class="macros card">
+          <div class="macro-row"><span class="m-dot p"></span><span class="m-name">Белки</span><div class="m-bar"><div class="m-fill p" id="mfill-p"></div></div><span class="m-val" id="mval-p">0/0 г</span></div>
+          <div class="macro-row"><span class="m-dot f"></span><span class="m-name">Жиры</span><div class="m-bar"><div class="m-fill f" id="mfill-f"></div></div><span class="m-val" id="mval-f">0/0 г</span></div>
+          <div class="macro-row"><span class="m-dot c"></span><span class="m-name">Углеводы</span><div class="m-bar"><div class="m-fill c" id="mfill-c"></div></div><span class="m-val" id="mval-c">0/0 г</span></div>
+        </div>
+
+        <div class="water card" id="water-card">
+          <div class="water-head"><span>💧 Вода</span><span id="water-val">0 мл</span></div>
+          <div class="water-bar"><div id="water-fill"></div></div>
+          <div class="water-btns">
+            <button class="chip" data-water="-100">−100</button>
+            <button class="chip" data-water="-250">−250</button>
+            <button class="chip chip-green" data-water="250">+250</button>
+            <button class="chip chip-green" data-water="100">+100</button>
+          </div>
+        </div>
+
+        <div class="quick card" id="quick-card">
+          <div class="card-title">Быстро добавить</div>
+          <div class="chips" id="quick-chips"></div>
+        </div>
+
+        <div id="meals-today"></div>
+      </section>
+
+      <!-- ЖУРНАЛ -->
+      <section id="tab-journal" class="tab hidden">
+        <div class="date-nav">
+          <button class="icon-btn" id="jn-prev">‹</button>
+          <div class="date-nav-mid">
+            <div id="jn-date"></div>
+            <button class="link-btn" id="jn-today">Сегодня</button>
+          </div>
+          <button class="icon-btn" id="jn-next">›</button>
+        </div>
+        <div class="card week-chart">
+          <div class="chart-toggle">
+            <button class="chip active" id="ct-kcal">🔥 Калории</button>
+            <button class="chip" id="ct-weight">⚖️ Вес</button>
+          </div>
+          <div id="week-chart"></div>
+        </div>
+        <div class="card week-stats" id="week-stats"></div>
+        <div id="journal-meals"></div>
+      </section>
+
+      <!-- КАМЕРА -->
+      <section id="tab-camera" class="tab hidden">
+        <div class="cam-hero">
+          <div class="cam-icon">📸</div>
+          <h2>Распознай еду по фото</h2>
+          <p>Нейросеть работает прямо на телефоне. Сфотографируй тарелку — приложение предложит, что это.</p>
+          <input type="file" id="cam-input" accept="image/*" capture="environment" hidden>
+          <input type="file" id="cam-input-gallery" accept="image/*" hidden>
+          <button class="btn btn-primary btn-block" id="btn-cam-shot">📷 Сфотографировать</button>
+          <button class="btn btn-ghost btn-block" id="btn-cam-gallery">🖼 Из галереи</button>
+        </div>
+        <div class="card cam-result hidden" id="cam-result">
+          <img id="cam-preview" alt="Фото">
+          <div class="cam-status" id="cam-status"></div>
+          <div id="cam-results"></div>
+        </div>
+        <div class="cam-note">Точность зависит от освещения и ракурса. Нейросеть обучена на типичных блюдах и продуктах; сложные домашние блюда лучше добавлять через поиск. Фото не покидает устройство.</div>
+      </section>
+
+      <!-- ИИ-ЧАТ -->
+      <section id="tab-chat" class="tab hidden">
+        <div class="card chat-welcome" id="chat-welcome">
+          <div class="chat-ico">🤖</div>
+          <h2>Личный ИИ-диетолог</h2>
+          <p>Настоящая языковая модель <b>Qwen 2.5</b> работает прямо на твоём телефоне — без интернета и серверов. Она видит твой дневник питания, цели и вес и отвечает на вопросы: что съесть, как скорректировать день, как составить план.</p>
+          <div class="chat-requirements">
+            <div class="req">📦 Размер модели: <b>~460 МБ</b> (скачивается один раз, потом работает офлайн)</div>
+            <div class="req">📱 Рекомендуется iPhone 13+ и iOS 18 — иначе модель будет работать медленно (на CPU)</div>
+            <div class="req">💬 История чата хранится в памяти до закрытия приложения</div>
+          </div>
+          <button class="btn btn-primary btn-block" id="btn-chat-download">⬇️ Скачать модель и начать</button>
+          <button class="btn btn-ghost btn-block hidden" id="btn-chat-cancel">Отмена</button>
+        </div>
+
+        <div class="card hidden" id="chat-panel">
+          <div class="chat-head">
+            <div class="card-title">🤖 ИИ-диетолог <span class="chat-badge">офлайн</span></div>
+            <button class="link-btn" id="chat-clear">Очистить</button>
+          </div>
+          <div class="chat-log" id="chat-log"></div>
+          <div class="chat-presets" id="chat-presets"></div>
+          <div class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="Спроси про питание…" maxlength="300" autocomplete="off">
+            <button class="btn btn-primary chat-send-btn" id="chat-send" aria-label="Отправить">➤</button>
+          </div>
+        </div>
+
+        <div class="card hidden" id="chat-downloading">
+          <div class="card-title">⬇️ Загрузка модели…</div>
+          <div class="dl-bar"><div id="chat-dl-fill"></div></div>
+          <div class="dl-status" id="chat-dl-status">Подключаюсь к Hugging Face…</div>
+        </div>
+
+        <div class="cam-note">Модель скачивается с Hugging Face один раз и сохраняется в кэше браузера. Ответы генерирует твой телефон — фото и записи никуда не отправляются.</div>
+      </section>
+
+      <!-- СОВЕТЫ -->
+      <section id="tab-advice" class="tab hidden">
+        <div class="card advice-head" id="advice-head"></div>
+        <div class="card" id="advice-day">
+          <div class="card-title">🧠 Совет дня</div>
+          <div id="advice-items"></div>
+        </div>
+        <div class="card" id="advice-suggest">
+          <div class="card-title">🍽 Что съесть сейчас</div>
+          <div id="advice-suggestions"></div>
+        </div>
+        <div class="card" id="advice-week">
+          <div class="card-title">📊 За неделю</div>
+          <div id="advice-week-items"></div>
+        </div>
+        <div class="cam-note">Советы формируются локально на основе твоих целей, норм БЖУ и записей дневника. Это не медицинская рекомендация — при проблемах со здоровьем консультируйся с врачом.</div>
+      </section>
+
+      <!-- НАСТРОЙКИ -->
+      <section id="tab-settings" class="tab hidden">
+        <div class="card">
+          <div class="card-title">👤 Профиль</div>
+          <label class="field"><span>Имя</span><input type="text" id="set-name" maxlength="30"></label>
+          <div class="field-row">
+            <label class="field"><span>Пол</span>
+              <select id="set-sex"><option value="m">Мужской</option><option value="f">Женский</option></select>
+            </label>
+            <label class="field"><span>Возраст</span><input type="number" id="set-age" inputmode="numeric"></label>
+          </div>
+          <div class="field-row">
+            <label class="field"><span>Рост, см</span><input type="number" id="set-height" inputmode="decimal"></label>
+            <label class="field"><span>Вес, кг</span><input type="number" id="set-weight" inputmode="decimal"></label>
+          </div>
+          <label class="field"><span>Активность</span><select id="set-activity"></select></label>
+          <label class="field"><span>Цель</span><select id="set-goal"></select></label>
+          <button class="btn btn-primary btn-block" id="btn-save-profile">Сохранить</button>
+        </div>
+
+        <div class="card" id="set-targets"></div>
+
+        <div class="card" id="set-weight-card">
+          <div class="card-title">⚖️ Вес</div>
+          <div id="set-weight-info"></div>
+          <button class="btn btn-ghost btn-block" id="btn-add-weight">＋ Записать вес</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">💾 Данные</div>
+          <div class="set-row">
+            <div><b>Экспорт</b><div class="set-sub">Скачать все записи в файл</div></div>
+            <button class="btn btn-ghost" id="btn-export">Скачать</button>
+          </div>
+          <div class="set-row">
+            <div><b>Импорт</b><div class="set-sub">Восстановить из файла</div></div>
+            <button class="btn btn-ghost" id="btn-import">Загрузить</button>
+            <input type="file" id="import-input" accept=".json" hidden>
+          </div>
+          <div class="set-row danger">
+            <div><b>Сбросить всё</b><div class="set-sub">Удалить профиль и записи</div></div>
+            <button class="btn btn-danger" id="btn-reset">Сброс</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">ℹ️ О приложении</div>
+          <p class="about-p">«Калории» — локальный трекер питания. Все данные хранятся только на твоём устройстве, ничего не отправляется в интернет. Нейросеть распознавания (MobileNetV2, 13 МБ) загружена в приложение и работает офлайн.</p>
+          <p class="about-p">Пищевая ценность в базе — усреднённые справочные значения на 100 г, реальные цифры могут отличаться в зависимости от рецепта и производителя.</p>
+          <p class="about-v" id="about-version"></p>
+        </div>
+      </section>
+    </main>
+
+    <nav id="tabbar">
+      <button class="tab-btn active" data-tab="home"><span class="t-ico">🏠</span><span>Сегодня</span></button>
+      <button class="tab-btn" data-tab="journal"><span class="t-ico">📅</span><span>Журнал</span></button>
+      <button class="tab-btn" data-tab="camera"><span class="t-ico">📸</span><span>Фото</span></button>
+      <button class="tab-btn" data-tab="chat"><span class="t-ico">🤖</span><span>ИИ</span></button>
+      <button class="tab-btn" data-tab="advice"><span class="t-ico">🧠</span><span>Советы</span></button>
+      <button class="tab-btn" data-tab="settings"><span class="t-ico">⚙️</span><span>Ещё</span></button>
+    </nav>
+  </div>
+
+  <!-- ======================= МОДАЛКИ ======================= -->
+  <div id="modal-search" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <input type="search" id="search-input" placeholder="Найти продукт или блюдо…" autocomplete="off">
+        <button class="icon-btn" id="search-close">✕</button>
+      </div>
+      <div class="cat-chips" id="search-cats"></div>
+      <div class="search-results" id="search-results"></div>
+    </div>
+  </div>
+
+  <div id="modal-portion" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div class="portion-title"><span id="portion-emoji">🍽</span> <b id="portion-name"></b></div>
+        <button class="icon-btn" id="portion-close">✕</button>
+      </div>
+      <div class="portion-grams">
+        <button class="g-btn" data-dg="-25">−25</button>
+        <div class="g-display"><input type="number" id="portion-grams" inputmode="numeric" min="1" max="5000"><span>г</span></div>
+        <button class="g-btn" data-dg="25">+25</button>
+      </div>
+      <div class="g-presets" id="portion-presets"></div>
+      <div class="portion-macros" id="portion-macros"></div>
+      <div class="field"><span>Заметка (необязательно)</span><input type="text" id="portion-note" maxlength="120" placeholder="Например: домашний рецепт, без масла…"></div>
+      <div class="field"><span>Приём пищи</span>
+        <div class="seg" id="portion-meal"></div>
+      </div>
+      <div class="field"><span>Дата</span><input type="date" id="portion-date"></div>
+      <button class="btn btn-primary btn-block" id="portion-add">Добавить</button>
+    </div>
+  </div>
+
+  <div id="modal-confirm" class="modal hidden">
+    <div class="modal-card modal-confirm">
+      <div id="confirm-text"></div>
+      <div class="confirm-btns">
+        <button class="btn btn-ghost" id="confirm-cancel">Отмена</button>
+        <button class="btn btn-danger" id="confirm-ok">Да</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-weight" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div class="portion-title">⚖️ Записать вес</div>
+        <button class="icon-btn" id="weight-close">✕</button>
+      </div>
+      <div class="field"><span>Вес, кг</span><input type="number" id="weight-kg" inputmode="decimal" step="0.1" min="30" max="300" placeholder="72,5"></div>
+      <div class="field"><span>Дата</span><input type="date" id="weight-date"></div>
+      <button class="btn btn-primary btn-block" id="weight-save">Сохранить</button>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+
+  <script src="vendor/tf.min.js"></script>
+  <script src="vendor/mobilenet.min.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/camera.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
